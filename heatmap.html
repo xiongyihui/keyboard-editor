@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>M60 Keyboard Heatmap</title>
+    <link rel="stylesheet" href="keyboard.css" type="text/css">
+    <script src="js/heatmap.min.js"></script>
+    <script src="js/webusb.js"></script>
+</head>
+
+<body>
+<h2 id="page-title">M60 Keyboard Heatmap</h2>
+<p>Load heatmap from your M60 Keyboard</p>
+<div id="button-pane">
+    <button id="load" class="btn">Load</button>
+    <button id="share" class="btn">Share</button>
+</div>
+<div id="keyboard-pane">
+    <div id="keyboard-outline" class="keyboard-outline"></div>
+</div>
+</div>
+<script>
+    // todo - share
+    // https://github.com/tsayen/dom-to-image
+    var gradients = [
+        { 0.45: "rgb(0,0,255)", 0.55: "rgb(0,255,255)", 0.65: "rgb(0,255,0)", 0.85: "yellow", 1.0: "rgb(255,0,0)"},
+        { 0.45: "rgb(255,255,255)", 0.70: "rgb(0,0,0)",0.9: "rgb(2,255,246)", 1.0: "rgb(3,34,66)"},
+        { 0.45: "rgb(216,136,211)", 0.55: "rgb(0,255,255)", 0.65: "rgb(233,59,233)", 0.95: "rgb(255,0,240)", 1.0: "yellow"}
+    ];
+    
+    var container = document.getElementById("keyboard-outline");
+
+    var updateHeatmap = function (buffer) {
+        var heatmap = h337.create({
+            maxOpacity: .3,
+            minOpacity: 0,
+            radius: 40,
+            // visible: true,
+            gradient: gradients[0],
+            container: container
+        });
+
+        var data = [];
+        for (var row=0; row<8; row++) {
+            for (var col=0; col<8; col++) {
+                var key = document.getElementById("key-" + row + col);
+                if (key) {
+                    // console.log(key.offsetWidth, key.offsetWidth, key.offsetLeft, key.offsetTop);
+                    var x = key.offsetLeft + key.offsetWidth / 2;
+                    var y = key.offsetTop + key.offsetHeight / 2;
+                    data.push({ x: x, y: y, value: buffer[col+row*8] });
+                    // data.push({ x: x, y: y, value: Math.random() * 100 });
+                }
+            }
+        }
+
+        max = Math.max(Math.max(...buffer), 10);
+        console.log(max, data);
+        heatmap.setData({ max: max,  data: data });
+    };
+
+    fetch("layout-m60.html")
+    .then(data => data.text())
+    .then(text => {
+        container.innerHTML = text;
+    }).catch(error => {
+        console.log(error);
+    });
+
+    document.getElementById("load").addEventListener("click", e => {
+        webusb.get().then(device => {
+            device.connect().then(device => {
+                device.read(0x2000, 8*8*4).then(result => {
+                    var buf = new Uint32Array(result.data.buffer);
+                    console.log(buf);
+                    updateHeatmap(buf);
+                });
+            });
+        });
+    });
+</script>
+</body>
+</html>

@@ -15,6 +15,7 @@
     <button id="load" class="btn">Load</button>
     <button id="save" class="btn">Save</button>
     <button id="copy" class="btn">Copy</button>
+    <button id="share" class="btn">Share</button>
 </div>
 <div id="keyboard-pane">
     <div id="keyboard-outline" class="keyboard-outline"></div>
@@ -30,21 +31,22 @@
     var container = document.getElementById("keyboard-outline");
 
     var updateHeatmap = function (buffer) {
-        var heatmap = h337.create({
-            maxOpacity: .3,
-            minOpacity: 0,
-            radius: 40,
-            // visible: true,
-            gradient: gradients[0],
-            container: container
-        });
+        if (!window.heatmap) {
+            window.heatmap = h337.create({
+                maxOpacity: .3,
+                minOpacity: 0,
+                radius: 40,
+                // visible: true,
+                gradient: gradients[0],
+                container: container
+            });
+        }
 
         var data = [];
         for (var row=0; row<8; row++) {
             for (var col=0; col<8; col++) {
                 var key = document.getElementById("key-" + row + col);
                 if (key) {
-                    // console.log(key.offsetWidth, key.offsetWidth, key.offsetLeft, key.offsetTop);
                     var x = key.offsetLeft + key.offsetWidth / 2;
                     var y = key.offsetTop + key.offsetHeight / 2;
                     data.push({ x: x, y: y, value: buffer[col+row*8] });
@@ -53,15 +55,23 @@
             }
         }
 
-        max = Math.max(Math.max(...buffer), 10);
-        console.log(max, data);
-        heatmap.setData({ max: max,  data: data });
+        window.heatmap.setData({ max: 255,  data: data });
     };
 
     fetch("layout-m60.html")
     .then(data => data.text())
     .then(text => {
         container.innerHTML = text;
+        var s = atob(document.location.hash.substring(1));
+        console.log(s);
+        if (s && s.length == 64) {
+            var buf = new Uint8Array(s.length);
+            for (var i=0; i<s.length; i++) {
+                buf[i] = s.charCodeAt(i);
+            }
+            console.log(buf);
+            updateHeatmap(buf);
+        }
     }).catch(error => {
         console.log(error);
     });
@@ -70,9 +80,14 @@
         webusb.get().then(device => {
             device.connect().then(device => {
                 device.read(0x2000, 8*8*4).then(result => {
-                    var buf = new Uint32Array(result.data.buffer);
-                    console.log(buf);
-                    updateHeatmap(buf);
+                    var buf32 = new Uint32Array(result.data.buffer);
+                    var max = Math.max.apply(null, buf32);
+                    var scale = max > 255 ? (x => x * 255 / max) : (x => x);
+                    var buf8 = new Uint8Array(buf32.map(scale));
+                    var s = btoa(String.fromCharCode.apply(null, buf8));
+                    console.log(s, s.length);
+                    document.location.hash = "#" + s;
+                    updateHeatmap(buf8);
                 });
             });
         });
@@ -91,6 +106,11 @@
     document.getElementById("copy").addEventListener("click", e => {
         domtoimage.toBlob(container)
         .then(blob => navigator.clipboard.write([new ClipboardItem({'image/png': blob})]));
+    });
+
+    document.getElementById("share").addEventListener("click", e => {
+        console.log(document.location.hash);
+        window.open("https://twitter.com/share?url="+ encodeURIComponent(window.location.href)+"&text="+document.title);
     });
 </script>
 </body>
